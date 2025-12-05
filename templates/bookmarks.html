@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>私密书签</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=14">
+    <link rel="stylesheet" href="/static/css/bookmarks.css?v=2">
+</head>
+<body>
+    <div class="container">
+        <!-- 书签面板 -->
+        <div class="bookmarks-panel" id="bookmarksPanel">
+            <div class="header">
+                <h1>🔖 私密书签</h1>
+                <a href="/" class="btn btn-outline btn-sm">返回首页</a>
+            </div>
+
+            <!-- 添加书签 -->
+            <div class="add-form">
+                <input type="text" id="newTitle" placeholder="标题" autocomplete="off">
+                <input type="url" id="newUrl" placeholder="https://example.com" autocomplete="off" onkeydown="if(event.key==='Enter')addBookmark()">
+                <button class="btn btn-primary" onclick="addBookmark()">添加</button>
+            </div>
+            <div class="error-msg" id="addError"></div>
+
+            <!-- 书签列表 -->
+            <div class="bookmark-list" id="bookmarkList">
+                <div class="empty-hint">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/bookmarks.js?v=2"></script>
+</body>
+</html>
