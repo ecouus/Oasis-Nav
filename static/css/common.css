@@ -1,0 +1,95 @@
+/* ==================== 共享主题配色 ==================== */
+
+/* 默认主题：米黄色护眼 */
+:root, [data-theme="warm"] {
+    --bg-body: #f5f0e6;
+    --bg-sidebar: #ebe5d9;
+    --bg-card: #fff8ed;
+    --bg-input: #fff8ed;
+    --text-main: #4a4539;
+    --text-muted: #8c8578;
+    --accent: #d4a574;
+    --accent-hover: #c4956a;
+    --accent-rgb: 212, 165, 116;
+    --border: rgba(74, 69, 57, 0.12);
+    --shadow: 0 4px 12px rgba(74, 69, 57, 0.1);
+    --success: #6b9b6b;
+    --danger: #c75050;
+    --scrollbar: #d4cfc3;
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+    --bg-body: #1a1a2e;
+    --bg-sidebar: #16213e;
+    --bg-card: #252550;
+    --bg-input: #252550;
+    --text-main: #e8e8e8;
+    --text-muted: #9a9ab0;
+    --accent: #7c4dff;
+    --accent-hover: #9e7aff;
+    --accent-rgb: 124, 77, 255;
+    --border: rgba(255, 255, 255, 0.08);
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --success: #4caf50;
+    --danger: #f44336;
+    --scrollbar: #333;
+}
+
+/* 明亮主题 */
+[data-theme="light"] {
+    --bg-body: #f0f4f8;
+    --bg-sidebar: #e8eef4;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --text-main: #1a1a2e;
+    --text-muted: #6b7c93;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-rgb: 59, 130, 246;
+    --border: rgba(0, 0, 0, 0.06);
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    --success: #22c55e;
+    --danger: #ef4444;
+    --scrollbar: #d0d0d0;
+}
+
+/* 绿色护眼主题 */
+[data-theme="green"] {
+    --bg-body: #e8f0e8;
+    --bg-sidebar: #dce8dc;
+    --bg-card: #f0f8f0;
+    --bg-input: #f0f8f0;
+    --text-main: #3d4a3d;
+    --text-muted: #6b7d6b;
+    --accent: #4a9d4a;
+    --accent-hover: #3a8d3a;
+    --accent-rgb: 74, 157, 74;
+    --border: rgba(61, 74, 61, 0.12);
+    --shadow: 0 4px 12px rgba(61, 74, 61, 0.1);
+    --success: #4a9d4a;
+    --danger: #c75050;
+    --scrollbar: #c5d4c5;
+}
+
+/* 基础重置 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-body);
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 平滑滚动 */
+html {
+    scroll-behavior: smooth;
+}
+
+/* 选中文本颜色 */
+::selection {
+    background: var(--accent);
+    color: white;
+}
