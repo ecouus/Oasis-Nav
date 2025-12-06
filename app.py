@@ -701,7 +701,7 @@ def api_update_hidden_password():
 def api_get_site_settings():
     """获取站点设置（公开）"""
     return jsonify({
-        'site_title': get_config('site_title') or 'Nav',
+        'site_title': get_config('site_title') or 'Oasis-Nav',
         'site_icon': get_config('site_icon') or '🥭',
         'favicon': get_config('favicon') or '',
         'footer_text': get_config('footer_text') or '',
