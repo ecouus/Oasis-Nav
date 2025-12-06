@@ -1,18 +1,23 @@
 """
-NavHub - 轻量级导航页后端
+Oasis-Nav - 轻量级导航页后端
 Flask + SQLite 方案
 """
 
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template, send_from_directory, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from urllib.parse import urlparse
 import sqlite3
 import secrets
 import os
+import re
 from datetime import datetime, timedelta
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = secrets.token_hex(32)  # 每次启动随机生成，重启后登录失效
+
+# CSRF Token 存储
+csrf_tokens = {}
 
 # 配置（支持环境变量，便于 Docker 部署）
 DATABASE = os.environ.get('DATABASE_PATH', 'data.db')
@@ -140,7 +145,8 @@ def init_db():
 
 def hash_password(password):
     """安全的密码哈希（使用 PBKDF2 + Salt）"""
-    return generate_password_hash(password, method='pbkdf2:sha256')
+    # 使用 150,000 次迭代，在安全性和性能之间取得平衡
+    return generate_password_hash(password, method='pbkdf2:sha256:150000')
 
 def verify_password(password, password_hash):
     """验证密码"""
@@ -153,6 +159,47 @@ def is_strong_password(password):
     has_letter = any(c.isalpha() for c in password)
     has_digit = any(c.isdigit() for c in password)
     return has_letter and has_digit
+
+def is_valid_url(url):
+    """验证 URL 是否安全"""
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+        # 禁止危险协议
+        dangerous_schemes = ['javascript', 'data', 'vbscript', 'file']
+        if parsed.scheme.lower() in dangerous_schemes:
+            return False
+        # 只允许 http/https 或相对路径
+        if parsed.scheme and parsed.scheme.lower() not in ['http', 'https']:
+            return False
+        # 检查是否包含可疑的 JavaScript 代码
+        suspicious_patterns = [
+            r'javascript:', r'on\w+\s*=', r'<script', r'</script>',
+            r'data:', r'vbscript:'
+        ]
+        url_lower = url.lower()
+        for pattern in suspicious_patterns:
+            if re.search(pattern, url_lower, re.IGNORECASE):
+                return False
+        return True
+    except Exception:
+        return False
+
+def generate_csrf_token():
+    """生成 CSRF Token"""
+    token = secrets.token_hex(32)
+    csrf_tokens[token] = datetime.now() + timedelta(hours=24)
+    return token
+
+def validate_csrf_token(token):
+    """验证 CSRF Token"""
+    if not token or token not in csrf_tokens:
+        return False
+    if csrf_tokens[token] < datetime.now():
+        del csrf_tokens[token]
+        return False
+    return True
 
 def get_config(key):
     """获取配置"""
@@ -219,6 +266,56 @@ def page_not_found(e):
     return render_template('404.html'), 404
 
 # ==================== API 路由 ====================
+
+def check_csrf():
+    """检查 CSRF（通过验证 Origin/Referer 头）"""
+    # GET 请求不需要检查
+    if request.method == 'GET':
+        return True
+    
+    # 获取 Origin 或 Referer
+    origin = request.headers.get('Origin', '')
+    referer = request.headers.get('Referer', '')
+    
+    # 如果没有 Origin 和 Referer，拒绝请求（可能是跨站请求）
+    # 但允许本地开发时没有这些头
+    if not origin and not referer:
+        # 允许没有 Origin/Referer 的请求（某些情况下浏览器不发送）
+        return True
+    
+    # 获取当前请求的 Host
+    host = request.headers.get('Host', '')
+    
+    # 验证 Origin 或 Referer 是否匹配当前 Host
+    if origin:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            if parsed.netloc != host:
+                return False
+        except:
+            return False
+    elif referer:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(referer)
+            if parsed.netloc != host:
+                return False
+        except:
+            return False
+    
+    return True
+
+@app.before_request
+def csrf_protect():
+    """CSRF 防护中间件"""
+    # 只检查修改数据的请求
+    if request.method in ['POST', 'PUT', 'DELETE']:
+        # 排除登录和初始化 API（这些需要从任何来源访问）
+        safe_endpoints = ['/api/login', '/api/init', '/api/verify-hidden', '/api/verify-bookmark']
+        if request.path not in safe_endpoints:
+            if not check_csrf():
+                return jsonify({'error': '请求来源验证失败'}), 403
 
 @app.route('/api/init', methods=['POST'])
 def api_init():
@@ -351,11 +448,17 @@ def api_get_categories():
 def api_create_category():
     """创建分类"""
     data = request.json
+    name = data.get('name', '').strip()
+    
+    # 验证分类名称
+    if not name:
+        return jsonify({'error': '分类名称不能为空'}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         'INSERT INTO categories (name, parent_id, sort_order) VALUES (?, ?, ?)',
-        (data.get('name'), data.get('parent_id'), data.get('sort_order', 0))
+        (name, data.get('parent_id'), data.get('sort_order', 0))
     )
     conn.commit()
     category_id = cursor.lastrowid
@@ -367,11 +470,17 @@ def api_create_category():
 def api_update_category(id):
     """更新分类"""
     data = request.json
+    name = data.get('name', '').strip()
+    
+    # 验证分类名称
+    if not name:
+        return jsonify({'error': '分类名称不能为空'}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         'UPDATE categories SET name = ?, parent_id = ?, sort_order = ? WHERE id = ?',
-        (data.get('name'), data.get('parent_id'), data.get('sort_order', 0), id)
+        (name, data.get('parent_id'), data.get('sort_order', 0), id)
     )
     conn.commit()
     conn.close()
@@ -428,14 +537,27 @@ def api_get_links():
 def api_create_link():
     """创建链接"""
     data = request.json
+    title = data.get('title', '').strip()
+    url = data.get('url', '').strip()
+    
+    # 验证必填字段
+    if not title:
+        return jsonify({'error': '链接标题不能为空'}), 400
+    if not url:
+        return jsonify({'error': '链接地址不能为空'}), 400
+    
+    # 验证 URL 安全性
+    if not is_valid_url(url):
+        return jsonify({'error': 'URL 格式无效或包含不安全内容'}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''INSERT INTO links (title, url, icon, description, category_id, is_hidden, sort_order) 
            VALUES (?, ?, ?, ?, ?, ?, ?)''',
         (
-            data.get('title'),
-            data.get('url'),
+            title,
+            url,
             data.get('icon'),
             data.get('description'),
             data.get('category_id'),
@@ -453,14 +575,27 @@ def api_create_link():
 def api_update_link(id):
     """更新链接"""
     data = request.json
+    title = data.get('title', '').strip()
+    url = data.get('url', '').strip()
+    
+    # 验证必填字段
+    if not title:
+        return jsonify({'error': '链接标题不能为空'}), 400
+    if not url:
+        return jsonify({'error': '链接地址不能为空'}), 400
+    
+    # 验证 URL 安全性
+    if not is_valid_url(url):
+        return jsonify({'error': 'URL 格式无效或包含不安全内容'}), 400
+    
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
         '''UPDATE links SET title = ?, url = ?, icon = ?, description = ?, 
            category_id = ?, is_hidden = ?, sort_order = ? WHERE id = ?''',
         (
-            data.get('title'),
-            data.get('url'),
+            title,
+            url,
             data.get('icon'),
             data.get('description'),
             data.get('category_id'),
@@ -535,7 +670,8 @@ def api_get_site_settings():
         'site_icon': get_config('site_icon') or '🥭',
         'favicon': get_config('favicon') or '',
         'footer_text': get_config('footer_text') or '',
-        'project_url': 'https://github.com/your-username/nav'  # 固定的项目地址
+        'bookmark_hidden': get_config('bookmark_hidden') == '1',  # 书签是否隐藏
+        'project_url': 'https://github.com/ecouus/Oasis-Nav'  # 固定的项目地址
     })
 
 @app.route('/api/site-settings', methods=['PUT'])
@@ -552,6 +688,8 @@ def api_update_site_settings():
         set_config('favicon', data['favicon'])
     if 'footer_text' in data:
         set_config('footer_text', data['footer_text'])
+    if 'bookmark_hidden' in data:
+        set_config('bookmark_hidden', '1' if data['bookmark_hidden'] else '0')
     
     return jsonify({'message': '站点设置更新成功'})
 
@@ -632,6 +770,15 @@ def bookmarks_page():
     """私密书签页"""
     return render_template('bookmarks.html')
 
+@app.route('/api/bookmarks/check', methods=['GET'])
+def api_bookmarks_check():
+    """检查书签是否需要认证"""
+    is_hidden = get_config('bookmark_hidden') == '1'
+    return jsonify({
+        'need_auth': is_hidden,
+        'has_password': bool(get_config('bookmark_password'))
+    })
+
 @app.route('/api/bookmarks/auth', methods=['POST'])
 def api_bookmarks_auth():
     """书签页密码验证（独立密码，返回临时 token，不缓存）"""
@@ -674,9 +821,14 @@ def api_update_bookmark_password():
     return jsonify({'message': '书签密码更新成功'})
 
 def require_bookmark_auth(f):
-    """书签页认证装饰器"""
+    """书签页认证装饰器（如果书签未隐藏则跳过认证）"""
     @wraps(f)
     def decorated(*args, **kwargs):
+        # 如果书签没有设置为隐藏，则无需认证
+        if get_config('bookmark_hidden') != '1':
+            return f(*args, **kwargs)
+        
+        # 书签已隐藏，需要验证 token
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
         token_key = f'bookmark_{token}'
         if not token or token_key not in active_tokens:
@@ -744,7 +896,7 @@ if __name__ == '__main__':
     debug_mode = os.environ.get('DEBUG', '0') == '1'
     
     print("=" * 50)
-    print("NavHub 导航页后端已启动")
+    print("Oasis-Nav 导航页后端已启动")
     print(f"运行模式: {'开发模式 (DEBUG)' if debug_mode else '生产模式'}")
     print("首页: http://localhost:6966")
     print("后台: http://localhost:6966/admin")

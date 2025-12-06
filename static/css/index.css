@@ -148,6 +148,26 @@ body {
     font-weight: 500;
 }
 
+/* 书签导航按钮 */
+.bookmark-nav-item {
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .bookmark-nav-item {
+    border-left-color: rgba(255, 255, 255, 0.15);
+}
+
+.bookmark-tab {
+    color: var(--accent) !important;
+    font-weight: 500;
+}
+
+.bookmark-tab:hover {
+    background: rgba(var(--accent-rgb), 0.15) !important;
+}
+
 /* 下拉箭头 */
 .category-tab .arrow {
     font-size: 0.6rem;

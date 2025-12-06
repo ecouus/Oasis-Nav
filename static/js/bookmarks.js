@@ -1,25 +1,33 @@
-// 私密书签页 - 从 localStorage 获取 token（读取后立即删除，刷新即失效）
+// 书签页 - 支持公开访问或需要密码访问
 
-// 从 localStorage 获取 token 并立即删除
+// 从 localStorage 获取 token 并立即删除（如果有）
 const token = localStorage.getItem('bookmark_token');
-localStorage.removeItem('bookmark_token');  // 读取后立即删除，刷新即失效
+localStorage.removeItem('bookmark_token');  // 读取后立即删除
+
+let needAuth = true;  // 是否需要认证
 
 // API 请求封装
 function api(url, options = {}) {
     const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token && needAuth) headers['Authorization'] = `Bearer ${token}`;
     return fetch(url, { ...options, headers });
 }
 
 // 检查权限并加载数据
 async function init() {
-    if (!token) {
-        showError('权限不足');
-        return;
-    }
-    
-    // 尝试获取书签验证 token 是否有效
     try {
+        // 先检查书签是否需要认证
+        const checkRes = await fetch('/api/bookmarks/check');
+        const checkData = await checkRes.json();
+        needAuth = checkData.need_auth;
+        
+        // 如果需要认证但没有 token
+        if (needAuth && !token) {
+            showError('权限不足');
+            return;
+        }
+        
+        // 尝试获取书签
         const res = await api('/api/bookmarks');
         
         if (res.status === 401) {

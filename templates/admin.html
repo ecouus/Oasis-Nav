@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NavHub 管理后台</title>
+    <title>Oasis-Nav 管理后台</title>
     <link rel="stylesheet" href="/static/css/common.css?v=13">
     <link rel="stylesheet" href="/static/css/admin.css?v=13">
 </head>
@@ -11,7 +11,7 @@
     <div class="container">
         <!-- 初始化面板 -->
         <div class="init-panel hidden" id="initPanel">
-            <h2>🚀 初始化 NavHub</h2>
+            <h2>🚀 初始化 Oasis-Nav</h2>
             <p style="text-align:center; color:var(--text-muted); margin-bottom:25px;">首次使用，请设置管理密码</p>
             <div class="form-group">
                 <label>管理密码</label>
@@ -21,13 +21,13 @@
                 <label>确认密码</label>
                 <input type="password" id="initPasswordConfirm" placeholder="再次输入">
             </div>
-            <button class="btn btn-primary" style="width:100%" onclick="initPassword()">初始化</button>
+            <button class="btn btn-primary" style="width:100%" onclick="initPassword(event)">初始化</button>
             <div class="error-msg" id="initError"></div>
         </div>
 
         <!-- 登录面板 -->
         <div class="login-panel hidden" id="loginPanel">
-            <h2>🔐 NavHub 管理后台</h2>
+            <h2>🔐 Oasis-Nav 管理后台</h2>
             <div class="form-group">
                 <label>用户名</label>
                 <input type="text" id="loginUsername" placeholder="请输入用户名" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
@@ -44,7 +44,7 @@
         <div class="admin-panel hidden" id="adminPanel">
             <div class="header">
                 <h1>
-                    <a href="/">← NavHub</a>
+                    <a href="/">← Oasis-Nav</a>
                     <span style="color:var(--text-muted)">管理后台</span>
                 </h1>
                 <div style="display:flex;align-items:center;gap:15px;">
@@ -135,6 +135,16 @@
                         <label>页脚自定义</label>
                         <input type="text" id="footerText" placeholder="例如：我的个人导航 或 <a href='链接'>文字</a>">
                         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">支持 HTML，如 &lt;a href="链接"&gt;文字&lt;/a&gt;</p>
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:15px;padding:15px;background:var(--bg-card);border-radius:8px;">
+                        <input type="checkbox" id="bookmarkHidden" style="width:auto;margin:0;">
+                        <label for="bookmarkHidden" style="margin:0;cursor:pointer;flex:1;">
+                            <strong>隐藏书签页</strong>
+                            <p style="font-size:0.75rem;color:var(--text-muted);margin-top:3px;">
+                                启用后，书签页需要通过三击调色盘+输入密码访问；<br>
+                                不启用则在导航栏显示"书签"按钮，点击即可访问
+                            </p>
+                        </label>
                     </div>
                     <button class="btn btn-primary" onclick="updateSiteSettings()">保存站点设置</button>
                     <div class="success-msg hidden" id="siteSettingsSuccess">保存成功</div>

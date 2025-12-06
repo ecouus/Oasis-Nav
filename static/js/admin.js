@@ -20,9 +20,29 @@
 })();
 
 // ==================== 全局状态 ====================
-let token = localStorage.getItem('navhub_token');
+let token = localStorage.getItem('oasis_nav_token');
 let categories = [];
 let links = [];
+
+// ==================== 安全函数 ====================
+// HTML 转义，防止 XSS 攻击
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// 转义 HTML 属性值
+function escapeAttr(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
 
 // ==================== 工具函数 ====================
 function api(url, options = {}) {
@@ -44,7 +64,7 @@ async function checkAuth() {
         const verifyRes = await api('/api/categories', { method: 'POST', body: JSON.stringify({}) });
         if (verifyRes.status === 401) {
             token = null;
-            localStorage.removeItem('navhub_token');
+            localStorage.removeItem('oasis_nav_token');
         }
     }
 
@@ -74,10 +94,11 @@ function showPanel(panel) {
 }
 
 // ==================== 认证 ====================
-async function initPassword() {
+async function initPassword(event) {
     const password = document.getElementById('initPassword').value;
     const confirm = document.getElementById('initPasswordConfirm').value;
     const errorEl = document.getElementById('initError');
+    const btn = event.target;
 
     if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
         errorEl.textContent = '密码至少8位，需包含字母和数字';
@@ -88,27 +109,44 @@ async function initPassword() {
         return;
     }
 
-    const res = await fetch('/api/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    });
+    // 显示加载状态
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = '初始化中...';
+    errorEl.textContent = '';
 
-    if (res.ok) {
-        // 自动登录（默认用户名 admin）
-        const loginRes = await fetch('/api/login', {
+    try {
+        const res = await fetch('/api/init', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'admin', password })
+            body: JSON.stringify({ password })
         });
-        const data = await loginRes.json();
-        token = data.token;
-        localStorage.setItem('navhub_token', token);
-        showPanel('admin');
-        loadData();
-    } else {
-        const data = await res.json();
-        errorEl.textContent = data.error || '初始化失败';
+
+        if (res.ok) {
+            // 显示登录中状态
+            btn.textContent = '登录中...';
+            
+            // 自动登录（默认用户名 admin）
+            const loginRes = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: 'admin', password })
+            });
+            const data = await loginRes.json();
+            token = data.token;
+            localStorage.setItem('oasis_nav_token', token);
+            showPanel('admin');
+            loadData();
+        } else {
+            const data = await res.json();
+            errorEl.textContent = data.error || '初始化失败';
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    } catch (error) {
+        errorEl.textContent = '网络错误，请重试';
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
@@ -116,28 +154,43 @@ async function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('loginPassword').value;
     const errorEl = document.getElementById('loginError');
+    const btn = document.querySelector('#loginPanel button');
 
-    const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-    });
+    // 显示加载状态
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = '登录中...';
+    errorEl.textContent = '';
 
-    const data = await res.json();
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
 
-    if (res.ok) {
-        token = data.token;
-        localStorage.setItem('navhub_token', token);
-        showPanel('admin');
-        loadData();
-    } else {
-        errorEl.textContent = data.error || '登录失败';
+        const data = await res.json();
+
+        if (res.ok) {
+            token = data.token;
+            localStorage.setItem('oasis_nav_token', token);
+            showPanel('admin');
+            loadData();
+        } else {
+            errorEl.textContent = data.error || '登录失败';
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    } catch (error) {
+        errorEl.textContent = '网络错误，请重试';
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
 function logout() {
     token = null;
-    localStorage.removeItem('navhub_token');
+    localStorage.removeItem('oasis_nav_token');
     showPanel('login');
 }
 
@@ -293,7 +346,7 @@ function renderCategoriesTable() {
         html += `
             <tr draggable="true" data-id="${parent.id}" data-type="category">
                 <td class="drag-handle">⋮⋮</td>
-                <td><strong>${parent.name}</strong></td>
+                <td><strong>${escapeHtml(parent.name)}</strong></td>
                 <td>-</td>
                 <td class="actions">
                     <button class="btn btn-outline btn-sm" onclick="editCategory(${parent.id})">编辑</button>
@@ -308,8 +361,8 @@ function renderCategoriesTable() {
             html += `
                 <tr draggable="true" data-id="${child.id}" data-type="category" class="child-category">
                     <td class="drag-handle">⋮⋮</td>
-                    <td style="padding-left: 30px;">↳ ${child.name}</td>
-                    <td>${parent.name}</td>
+                    <td style="padding-left: 30px;">↳ ${escapeHtml(child.name)}</td>
+                    <td>${escapeHtml(parent.name)}</td>
                     <td class="actions">
                         <button class="btn btn-outline btn-sm" onclick="editCategory(${child.id})">编辑</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteCategory(${child.id})">删除</button>
@@ -331,11 +384,11 @@ function updateCategorySelects() {
 
     parentSelect.innerHTML = '<option value="">无</option>' +
         categories.filter(c => !c.parent_id).map(c => 
-            `<option value="${c.id}">${c.name}</option>`
+            `<option value="${c.id}">${escapeHtml(c.name)}</option>`
         ).join('');
 
     linkSelect.innerHTML = '<option value="">未分类</option>' +
-        categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
 }
 
 function showCategoryModal(id = null) {
@@ -468,7 +521,7 @@ function renderLinksTable() {
         html += `
             <tr class="category-header">
                 <td colspan="6" style="background:var(--bg-body);font-weight:600;color:var(--accent);padding:15px;">
-                    📁 ${parent.name} (${totalLinks})
+                    📁 ${escapeHtml(parent.name)} (${totalLinks})
                 </td>
             </tr>
         `;
@@ -487,7 +540,7 @@ function renderLinksTable() {
             html += `
                 <tr class="category-header child-category-header">
                     <td colspan="6" style="background:var(--bg-card);font-weight:500;color:var(--text-muted);padding:12px 15px 12px 35px;">
-                        ↳ 📂 ${child.name} (${childLinks.length})
+                        ↳ 📂 ${escapeHtml(child.name)} (${childLinks.length})
                     </td>
                 </tr>
             `;
@@ -524,9 +577,9 @@ function renderLinkRow(link, isChild = false) {
     return `
         <tr draggable="true" data-id="${link.id}" data-type="link" data-category="${link.category_id || ''}" class="${isChild ? 'child-link' : ''}">
             <td class="drag-handle">⋮⋮</td>
-            <td ${indent}>${link.title}</td>
+            <td ${indent}>${escapeHtml(link.title)}</td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                <a href="${link.url}" target="_blank" style="color:var(--accent)">${link.url}</a>
+                <a href="${escapeAttr(link.url)}" target="_blank" style="color:var(--accent)">${escapeHtml(link.url)}</a>
             </td>
             <td>
                 <span class="badge ${link.is_hidden ? 'badge-hidden' : 'badge-visible'}">
@@ -631,6 +684,7 @@ async function loadSiteSettings() {
         document.getElementById('siteIcon').value = data.site_icon || '🥭';
         document.getElementById('siteTitle').value = data.site_title || 'Nav';
         document.getElementById('footerText').value = data.footer_text || '';
+        document.getElementById('bookmarkHidden').checked = data.bookmark_hidden || false;
     } catch (err) {
         console.error('加载站点设置失败', err);
     }
@@ -648,7 +702,8 @@ async function updateSiteSettings() {
         favicon: document.getElementById('siteFavicon').value.trim(),
         site_icon: document.getElementById('siteIcon').value || '🥭',
         site_title: document.getElementById('siteTitle').value || 'Nav',
-        footer_text: document.getElementById('footerText').value
+        footer_text: document.getElementById('footerText').value,
+        bookmark_hidden: document.getElementById('bookmarkHidden').checked
     };
     
     const res = await api('/api/site-settings', {

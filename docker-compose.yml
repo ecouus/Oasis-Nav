@@ -2,8 +2,11 @@ version: '3.8'
 
 services:
   nav:
-    build: .
-    container_name: navhub
+    # 生产环境：使用远程镜像（推荐）
+    image: ecouus/oasis-nav:latest
+    # 开发环境：本地构建（注释上面 image，取消下面注释）
+    # build: .
+    container_name: oasis-nav
     restart: unless-stopped
     ports:
       - "6966:6966"

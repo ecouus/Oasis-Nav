@@ -1,11 +1,12 @@
-# NavHub Docker 镜像
+# Oasis-Nav Docker 镜像
 FROM python:3.11-slim
 
 # 设置工作目录
 WORKDIR /app
 
 # 创建非 root 用户运行应用（安全最佳实践）
-RUN groupadd -r navuser && useradd -r -g navuser navuser
+# 固定 UID/GID 为 999，方便宿主机设置权限
+RUN groupadd -r -g 999 navuser && useradd -r -u 999 -g navuser navuser
 
 # 安装依赖
 COPY requirements.txt .

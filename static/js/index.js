@@ -3,6 +3,27 @@ let categories = [];
 let links = [];
 let hiddenToken = null;
 let showingHidden = false;
+let bookmarkHidden = false;  // 书签是否隐藏（默认不隐藏）
+
+// ==================== 安全函数 ====================
+// HTML 转义，防止 XSS 攻击
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// 转义 HTML 属性值
+function escapeAttr(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
 
 // ==================== 主题系统 ====================
 const themeToggle = document.getElementById('themeToggle');
@@ -63,7 +84,7 @@ function applyCustomCss() {
 // 初始化主题
 loadTheme();
 
-// ==================== 隐蔽触发器（双击调色盘显示隐藏链接，三击打开书签页） ====================
+// ==================== 隐蔽触发器（双击调色盘显示隐藏链接，三击打开书签页 - 仅在书签隐藏时） ====================
 let clickCount = 0;
 let clickTimer = null;
 
@@ -78,8 +99,8 @@ document.getElementById('themeToggle').addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             showPasswordModal();
-        } else if (clickCount >= 3) {
-            // 三击 - 弹出书签密码框
+        } else if (clickCount >= 3 && bookmarkHidden) {
+            // 三击 - 弹出书签密码框（仅在书签隐藏时）
             e.preventDefault();
             e.stopPropagation();
             showBookmarkModal();
@@ -226,6 +247,14 @@ async function loadSiteSettings() {
         } else {
             footerCustom.style.display = 'none';
         }
+        
+        // 获取书签隐藏配置
+        bookmarkHidden = data.bookmark_hidden || false;
+        
+        // 如果已经加载了数据，重新渲染导航栏以更新书签按钮
+        if (categories.length > 0) {
+            renderCategoryNav();
+        }
     } catch (err) {
         console.error('加载站点设置失败', err);
     }
@@ -292,20 +321,20 @@ function renderCategoryNav() {
             html += `
                 <div class="category-item has-dropdown">
                     <button class="category-tab ${isFirst ? 'active' : ''}" data-id="${parent.id}">
-                        ${parent.name}
+                        ${escapeHtml(parent.name)}
                         <span class="arrow">▼</span>
                     </button>
                     <div class="category-dropdown">
                         ${parentSelfHasLinks ? `
                             <button class="category-dropdown-item" data-id="${parent.id}" 
                                     onclick="scrollToCategory(${parent.id}, this)">
-                                全部${parent.name}
+                                全部${escapeHtml(parent.name)}
                             </button>
                         ` : ''}
                         ${children.map(child => `
                             <button class="category-dropdown-item" data-id="${child.id}"
                                     onclick="scrollToCategory(${child.id}, this)">
-                                ${child.name}
+                                ${escapeHtml(child.name)}
                             </button>
                         `).join('')}
                     </div>
@@ -317,7 +346,7 @@ function renderCategoryNav() {
                 <div class="category-item">
                     <button class="category-tab ${isFirst ? 'active' : ''}" data-id="${parent.id}"
                             onclick="scrollToCategory(${parent.id}, this)">
-                        ${parent.name}
+                        ${escapeHtml(parent.name)}
                     </button>
                 </div>
             `;
@@ -327,6 +356,17 @@ function renderCategoryNav() {
             isFirst = false;
         }
     });
+    
+    // 如果书签不隐藏，在导航栏末尾添加书签按钮
+    if (!bookmarkHidden) {
+        html += `
+            <div class="category-item bookmark-nav-item">
+                <button class="category-tab bookmark-tab" onclick="window.location.href='/bookmarks'">
+                    🔖 书签
+                </button>
+            </div>
+        `;
+    }
     
     container.innerHTML = html;
     
@@ -420,14 +460,14 @@ function renderContent() {
         // 父分类标题和直属链接
         if (parentLinks.length > 0) {
             html += `
-                <h2 class="section-title">${parent.name}</h2>
+                <h2 class="section-title">${escapeHtml(parent.name)}</h2>
                 <div class="card-grid">
                     ${parentLinks.map(link => renderCard(link)).join('')}
                 </div>
             `;
         } else if (children.length > 0) {
             // 父分类没有直属链接但有子分类，显示父分类标题
-            html += `<h2 class="section-title">${parent.name}</h2>`;
+            html += `<h2 class="section-title">${escapeHtml(parent.name)}</h2>`;
         }
         
         // 子分类及其链接
@@ -437,7 +477,7 @@ function renderContent() {
             
             html += `
                 <div id="section-${child.id}" class="sub-section">
-                    <h3 class="sub-section-title">${child.name}</h3>
+                    <h3 class="sub-section-title">${escapeHtml(child.name)}</h3>
                     <div class="card-grid">
                         ${childLinks.map(link => renderCard(link)).join('')}
                     </div>
@@ -488,16 +528,16 @@ function renderCard(link) {
     const domain = getDomain(link.url);
     const iconUrl = link.icon || `https://icons.duckduckgo.com/ip3/${domain}.ico`;
     const hiddenClass = link.is_hidden ? 'hidden-item' : '';
-    const firstChar = link.title.charAt(0).toUpperCase();
-    const tooltip = link.description || link.title;
+    const firstChar = escapeHtml(link.title.charAt(0).toUpperCase());
+    const tooltip = escapeHtml(link.description || link.title);
     
     return `
-        <a href="${fullUrl}" target="_blank" class="nav-card ${hiddenClass}" 
-           data-title="${link.title}" data-desc="${link.description || ''}">
-            <img class="icon" src="${iconUrl}" alt="" 
+        <a href="${escapeAttr(fullUrl)}" target="_blank" class="nav-card ${hiddenClass}" 
+           data-title="${escapeAttr(link.title)}" data-desc="${escapeAttr(link.description || '')}">
+            <img class="icon" src="${escapeAttr(iconUrl)}" alt="" 
                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
             <div class="icon-fallback" style="display:none;">${firstChar}</div>
-            <span class="title">${link.title}</span>
+            <span class="title">${escapeHtml(link.title)}</span>
             <div class="tooltip">${tooltip}</div>
         </a>
     `;
