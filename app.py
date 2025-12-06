@@ -23,6 +23,7 @@ csrf_tokens = {}
 DATABASE = os.environ.get('DATABASE_PATH', 'data.db')
 
 # Token 存储 (简单实现，生产环境建议用 Redis)
+# 结构: {token: {'expires': datetime, 'ip': str}}
 active_tokens = {}
 
 # 登录失败计数器（防暴力破解）
@@ -225,10 +226,20 @@ def require_auth(f):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
         if not token or token not in active_tokens:
             return jsonify({'error': '未授权'}), 401
+        
+        token_info = active_tokens[token]
         # 检查 token 是否过期
-        if active_tokens[token] < datetime.now():
+        if token_info['expires'] < datetime.now():
             del active_tokens[token]
             return jsonify({'error': 'Token 已过期'}), 401
+        
+        # 检查 IP 绑定（如果开启）
+        ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+        if ip_binding_enabled and 'ip' in token_info:
+            client_ip = request.remote_addr
+            if token_info['ip'] != client_ip:
+                return jsonify({'error': 'IP 地址不匹配'}), 401
+        
         return f(*args, **kwargs)
     return decorated
 
@@ -399,11 +410,18 @@ def api_login():
     # 登录成功，清除失败记录
     clear_login_attempts(client_ip)
     
-    # 生成 token
+    # 生成 token，有效期 30 分钟
     token = secrets.token_hex(32)
-    active_tokens[token] = datetime.now() + timedelta(hours=24)
+    expires = datetime.now() + timedelta(minutes=30)
     
-    return jsonify({'token': token, 'expires_in': 86400})
+    # 如果开启 IP 绑定，记录 IP
+    ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+    active_tokens[token] = {
+        'expires': expires,
+        'ip': client_ip if ip_binding_enabled else None
+    }
+    
+    return jsonify({'token': token, 'expires_in': 1800})
 
 @app.route('/api/verify-hidden', methods=['POST'])
 def api_verify_hidden():
@@ -425,10 +443,17 @@ def api_verify_hidden():
     if verify_password(password, stored_hash):
         # 验证成功，清除失败记录
         clear_login_attempts(client_ip)
-        # 生成临时 token，有效期 10 分钟
+        # 生成临时 token，有效期 2 分钟（仅用于当前页面会话，刷新后前端会清除）
         token = secrets.token_hex(16)
-        active_tokens[f'hidden_{token}'] = datetime.now() + timedelta(minutes=10)
-        return jsonify({'token': token, 'expires_in': 600})
+        expires = datetime.now() + timedelta(minutes=2)
+        
+        # 如果开启 IP 绑定，记录 IP
+        ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+        active_tokens[f'hidden_{token}'] = {
+            'expires': expires,
+            'ip': client_ip if ip_binding_enabled else None
+        }
+        return jsonify({'token': token, 'expires_in': 120})
     
     record_login_failure(client_ip)
     return jsonify({'error': '密码错误'}), 401
@@ -513,15 +538,25 @@ def api_get_links():
     # 方式1: 通过隐藏密码获取的临时 token
     if show_hidden and hidden_token:
         token_key = f'hidden_{hidden_token}'
-        if token_key in active_tokens and active_tokens[token_key] > datetime.now():
-            can_see_hidden = True
+        if token_key in active_tokens:
+            token_info = active_tokens[token_key]
+            if token_info['expires'] > datetime.now():
+                # 检查 IP 绑定（如果开启）
+                ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+                if not ip_binding_enabled or token_info.get('ip') == request.remote_addr:
+                    can_see_hidden = True
     
     # 方式2: 后台管理员登录的 token（Bearer token）
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
         admin_token = auth_header.replace('Bearer ', '')
-        if admin_token in active_tokens and active_tokens[admin_token] > datetime.now():
-            can_see_hidden = True
+        if admin_token in active_tokens:
+            token_info = active_tokens[admin_token]
+            if token_info['expires'] > datetime.now():
+                # 检查 IP 绑定（如果开启）
+                ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+                if not ip_binding_enabled or token_info.get('ip') == request.remote_addr:
+                    can_see_hidden = True
     
     if can_see_hidden:
         cursor.execute('SELECT * FROM links ORDER BY sort_order, id')
@@ -763,6 +798,23 @@ def api_update_admin_path():
         'admin_path': new_path
     })
 
+@app.route('/api/security-settings', methods=['GET'])
+@require_auth
+def api_get_security_settings():
+    """获取安全设置（仅管理员）"""
+    return jsonify({
+        'ip_binding_enabled': get_config('ip_binding_enabled') == '1'
+    })
+
+@app.route('/api/security-settings', methods=['PUT'])
+@require_auth
+def api_update_security_settings():
+    """更新安全设置（仅管理员）"""
+    data = request.json
+    if 'ip_binding_enabled' in data:
+        set_config('ip_binding_enabled', '1' if data['ip_binding_enabled'] else '0')
+    return jsonify({'message': '安全设置更新成功'})
+
 # ==================== 私密书签 API ====================
 
 @app.route('/bookmarks')
@@ -803,11 +855,18 @@ def api_bookmarks_auth():
     # 验证成功，清除失败记录
     clear_login_attempts(client_ip)
     
-    # 生成短期 token，有效期 30 分钟
+    # 生成短期 token，有效期 5 分钟（仅用于当前页面会话，刷新后前端会清除）
     token = secrets.token_hex(32)
-    active_tokens[f'bookmark_{token}'] = datetime.now() + timedelta(minutes=30)
+    expires = datetime.now() + timedelta(minutes=5)
     
-    return jsonify({'token': token, 'expires_in': 1800})
+    # 如果开启 IP 绑定，记录 IP
+    ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+    active_tokens[f'bookmark_{token}'] = {
+        'expires': expires,
+        'ip': client_ip if ip_binding_enabled else None
+    }
+    
+    return jsonify({'token': token, 'expires_in': 300})
 
 @app.route('/api/config/bookmark-password', methods=['PUT'])
 @require_auth
@@ -833,9 +892,19 @@ def require_bookmark_auth(f):
         token_key = f'bookmark_{token}'
         if not token or token_key not in active_tokens:
             return jsonify({'error': '未授权'}), 401
-        if active_tokens[token_key] < datetime.now():
+        
+        token_info = active_tokens[token_key]
+        if token_info['expires'] < datetime.now():
             del active_tokens[token_key]
             return jsonify({'error': 'Token 已过期'}), 401
+        
+        # 检查 IP 绑定（如果开启）
+        ip_binding_enabled = get_config('ip_binding_enabled') == '1'
+        if ip_binding_enabled and 'ip' in token_info:
+            client_ip = request.remote_addr
+            if token_info['ip'] != client_ip:
+                return jsonify({'error': 'IP 地址不匹配'}), 401
+        
         return f(*args, **kwargs)
     return decorated
 

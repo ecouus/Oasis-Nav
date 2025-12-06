@@ -197,6 +197,26 @@
                     <div class="error-msg" id="bookmarkError"></div>
                 </div>
 
+                <!-- 安全增强设置 -->
+                <div class="card" style="margin-top:20px;">
+                    <h3 style="margin-bottom:20px">🛡️ 安全增强设置</h3>
+                    <p style="color:var(--text-muted);margin-bottom:20px;font-size:0.9rem;">
+                        开启 IP 绑定后，Token 只能从获取时的 IP 地址使用，即使 Token 泄露也无法在其他 IP 使用。
+                    </p>
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                            <input type="checkbox" id="ipBindingEnabled" style="width:auto;cursor:pointer;">
+                            <span>启用 IP 绑定</span>
+                        </label>
+                        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:5px;">
+                            注意：开启后，如果您的 IP 地址发生变化（如切换网络），需要重新登录。
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="updateSecuritySettings()">保存安全设置</button>
+                    <div class="success-msg hidden" id="securitySuccess">保存成功</div>
+                    <div class="error-msg" id="securityError"></div>
+                </div>
+
                 <!-- 后台路径设置 -->
                 <div class="card" style="margin-top:20px;">
                     <h3 style="margin-bottom:20px">🔗 后台路径设置</h3>

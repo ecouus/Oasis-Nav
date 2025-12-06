@@ -24,6 +24,34 @@ let token = localStorage.getItem('oasis_nav_token');
 let categories = [];
 let links = [];
 
+// ==================== Token 管理 ====================
+// 检查 token 是否已过期
+function isTokenExpired() {
+    const expiresAt = localStorage.getItem('oasis_nav_token_expires');
+    if (!expiresAt) return true;
+    return Date.now() > parseInt(expiresAt);
+}
+
+// 保存 token 和过期时间
+function saveToken(newToken, expiresIn) {
+    token = newToken;
+    localStorage.setItem('oasis_nav_token', newToken);
+    const expiresAt = Date.now() + expiresIn * 1000;
+    localStorage.setItem('oasis_nav_token_expires', expiresAt.toString());
+}
+
+// 清除 token
+function clearToken() {
+    token = null;
+    localStorage.removeItem('oasis_nav_token');
+    localStorage.removeItem('oasis_nav_token_expires');
+}
+
+// 初始化时检查 token 是否过期
+if (token && isTokenExpired()) {
+    clearToken();
+}
+
 // ==================== 安全函数 ====================
 // HTML 转义，防止 XSS 攻击
 function escapeHtml(text) {
@@ -63,8 +91,7 @@ async function checkAuth() {
     if (token) {
         const verifyRes = await api('/api/categories', { method: 'POST', body: JSON.stringify({}) });
         if (verifyRes.status === 401) {
-            token = null;
-            localStorage.removeItem('oasis_nav_token');
+            clearToken();
         }
     }
 
@@ -133,8 +160,7 @@ async function initPassword(event) {
                 body: JSON.stringify({ username: 'admin', password })
             });
             const data = await loginRes.json();
-            token = data.token;
-            localStorage.setItem('oasis_nav_token', token);
+            saveToken(data.token, data.expires_in);
             showPanel('admin');
             loadData();
         } else {
@@ -172,8 +198,7 @@ async function login() {
         const data = await res.json();
 
         if (res.ok) {
-            token = data.token;
-            localStorage.setItem('oasis_nav_token', token);
+            saveToken(data.token, data.expires_in);
             showPanel('admin');
             loadData();
         } else {
@@ -189,8 +214,7 @@ async function login() {
 }
 
 function logout() {
-    token = null;
-    localStorage.removeItem('oasis_nav_token');
+    clearToken();
     showPanel('login');
 }
 
@@ -209,6 +233,7 @@ async function loadData() {
     loadSiteSettings();  // 加载站点设置
     loadAdminPath();     // 加载后台路径设置
     loadAdminAccount();  // 加载管理账号设置
+    loadSecuritySettings();  // 加载安全设置
     updateCategorySelects();
 }
 
@@ -878,6 +903,42 @@ async function updateAdminPath() {
     } else {
         const data = await res.json();
         errorEl.textContent = data.error || '保存失败';
+    }
+}
+
+// 加载安全设置
+async function loadSecuritySettings() {
+    try {
+        const res = await api('/api/security-settings');
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('ipBindingEnabled').checked = data.ip_binding_enabled || false;
+        }
+    } catch (err) {
+        console.error('加载安全设置失败', err);
+    }
+}
+
+// 保存安全设置
+async function updateSecuritySettings() {
+    const errorEl = document.getElementById('securityError');
+    const successEl = document.getElementById('securitySuccess');
+    const ipBindingEnabled = document.getElementById('ipBindingEnabled').checked;
+    
+    errorEl.textContent = '';
+    successEl.classList.add('hidden');
+    
+    const res = await api('/api/security-settings', {
+        method: 'PUT',
+        body: JSON.stringify({ ip_binding_enabled: ipBindingEnabled })
+    });
+    
+    if (res.ok) {
+        successEl.classList.remove('hidden');
+        setTimeout(() => successEl.classList.add('hidden'), 3000);
+    } else {
+        const result = await res.json();
+        errorEl.textContent = result.error || '保存失败';
     }
 }
 
