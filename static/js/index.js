@@ -248,6 +248,12 @@ async function loadSiteSettings() {
             footerCustom.style.display = 'none';
         }
         
+        // 更新项目链接
+        const projectLink = document.getElementById('projectLink');
+        if (data.project_url) {
+            projectLink.href = data.project_url;
+        }
+        
         // 获取书签隐藏配置
         bookmarkHidden = data.bookmark_hidden || false;
         
