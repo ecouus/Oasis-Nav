@@ -3,7 +3,7 @@ Oasis-Nav - 轻量级导航页后端
 Flask + SQLite 方案
 """
 
-from flask import Flask, request, jsonify, render_template, send_from_directory, session
+from flask import Flask, request, jsonify, render_template, send_from_directory, session, Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from urllib.parse import urlparse
@@ -11,6 +11,8 @@ import sqlite3
 import secrets
 import os
 import re
+import hashlib
+import requests
 from datetime import datetime, timedelta
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -21,6 +23,10 @@ csrf_tokens = {}
 
 # 配置（支持环境变量，便于 Docker 部署）
 DATABASE = os.environ.get('DATABASE_PATH', 'data.db')
+
+# 图标缓存配置
+ICON_CACHE_DIR = os.environ.get('ICON_CACHE_DIR', 'icon_cache')
+ICON_CACHE_EXPIRE_DAYS = 7  # 缓存过期天数
 
 # Token 存储 (简单实现，生产环境建议用 Redis)
 # 结构: {token: {'expires': datetime, 'ip': str}}
@@ -457,6 +463,148 @@ def api_verify_hidden():
     
     record_login_failure(client_ip)
     return jsonify({'error': '密码错误'}), 401
+
+# ==================== 图标代理 ====================
+
+def get_icon_cache_path(icon_url):
+    """根据 URL 生成缓存文件路径"""
+    # 使用 MD5 哈希作为文件名
+    cache_key = hashlib.md5(icon_url.encode()).hexdigest()
+    return os.path.join(ICON_CACHE_DIR, f"{cache_key}.ico")
+
+def get_icon_meta_path(icon_url):
+    """获取图标元信息文件路径"""
+    cache_key = hashlib.md5(icon_url.encode()).hexdigest()
+    return os.path.join(ICON_CACHE_DIR, f"{cache_key}.meta")
+
+def is_cache_valid(cache_path):
+    """检查缓存是否有效（未过期）"""
+    if not os.path.exists(cache_path):
+        return False
+    
+    # 检查文件修改时间
+    file_mtime = datetime.fromtimestamp(os.path.getmtime(cache_path))
+    expire_time = file_mtime + timedelta(days=ICON_CACHE_EXPIRE_DAYS)
+    return datetime.now() < expire_time
+
+def save_icon_to_cache(icon_url, content, content_type):
+    """保存图标到缓存"""
+    # 确保缓存目录存在
+    if not os.path.exists(ICON_CACHE_DIR):
+        os.makedirs(ICON_CACHE_DIR, mode=0o755, exist_ok=True)
+    
+    cache_path = get_icon_cache_path(icon_url)
+    meta_path = get_icon_meta_path(icon_url)
+    
+    # 保存图标文件
+    with open(cache_path, 'wb') as f:
+        f.write(content)
+    
+    # 保存元信息（Content-Type）
+    with open(meta_path, 'w') as f:
+        f.write(content_type)
+
+def load_icon_from_cache(icon_url):
+    """从缓存加载图标"""
+    cache_path = get_icon_cache_path(icon_url)
+    meta_path = get_icon_meta_path(icon_url)
+    
+    if not is_cache_valid(cache_path):
+        return None, None
+    
+    try:
+        with open(cache_path, 'rb') as f:
+            content = f.read()
+        
+        content_type = 'image/x-icon'  # 默认类型
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r') as f:
+                content_type = f.read().strip() or content_type
+        
+        return content, content_type
+    except Exception:
+        return None, None
+
+@app.route('/api/icon-proxy', methods=['GET'])
+def api_icon_proxy():
+    """图标代理：从服务器端获取图标并返回给客户端，支持文件缓存"""
+    icon_url = request.args.get('url')
+    
+    if not icon_url:
+        return jsonify({'error': '缺少 url 参数'}), 400
+    
+    # 验证 URL 安全性
+    if not is_valid_url(icon_url):
+        return jsonify({'error': 'URL 格式无效或包含不安全内容'}), 400
+    
+    # 尝试从缓存加载
+    cached_content, cached_type = load_icon_from_cache(icon_url)
+    if cached_content:
+        return Response(
+            cached_content,
+            mimetype=cached_type,
+            headers={
+                'Cache-Control': 'public, max-age=86400',
+                'Content-Length': str(len(cached_content)),
+                'X-Cache': 'HIT'  # 标记缓存命中
+            }
+        )
+    
+    # 缓存未命中，从源站获取
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        }
+        
+        response = requests.get(
+            icon_url,
+            headers=headers,
+            timeout=10,
+            stream=True,
+            allow_redirects=True
+        )
+        
+        response.raise_for_status()
+        
+        # 限制文件大小（1MB）
+        content_length = response.headers.get('Content-Length')
+        if content_length and int(content_length) > 1024 * 1024:
+            return jsonify({'error': '文件过大'}), 400
+        
+        # 读取内容
+        content = b''
+        max_size = 1024 * 1024
+        for chunk in response.iter_content(chunk_size=8192):
+            content += chunk
+            if len(content) > max_size:
+                return jsonify({'error': '文件过大'}), 400
+        
+        # 获取 Content-Type
+        content_type = response.headers.get('Content-Type', 'image/x-icon')
+        
+        # 保存到缓存
+        try:
+            save_icon_to_cache(icon_url, content, content_type)
+        except Exception as e:
+            print(f"保存图标缓存失败: {e}")
+        
+        return Response(
+            content,
+            mimetype=content_type,
+            headers={
+                'Cache-Control': 'public, max-age=86400',
+                'Content-Length': str(len(content)),
+                'X-Cache': 'MISS'  # 标记缓存未命中
+            }
+        )
+        
+    except requests.exceptions.Timeout:
+        return jsonify({'error': '请求超时'}), 504
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'获取图标失败'}), 502
+    except Exception as e:
+        return jsonify({'error': '服务器错误'}), 500
 
 @app.route('/api/categories', methods=['GET'])
 def api_get_categories():

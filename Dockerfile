@@ -17,8 +17,8 @@ COPY app.py .
 COPY static/ ./static/
 COPY templates/ ./templates/
 
-# 创建数据目录并设置权限
-RUN mkdir -p /app/data && chown -R navuser:navuser /app
+# 创建数据目录和图标缓存目录并设置权限
+RUN mkdir -p /app/data /app/icon_cache && chown -R navuser:navuser /app
 
 # 切换到非 root 用户
 USER navuser
@@ -26,6 +26,7 @@ USER navuser
 # 环境变量
 ENV PYTHONUNBUFFERED=1
 ENV DATABASE_PATH=/app/data/data.db
+ENV ICON_CACHE_DIR=/app/icon_cache
 
 # 暴露端口
 EXPOSE 6966

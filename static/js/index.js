@@ -532,7 +532,9 @@ function getDomain(url) {
 function renderCard(link) {
     const fullUrl = normalizeUrl(link.url);
     const domain = getDomain(link.url);
-    const iconUrl = link.icon || `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+    const originalIconUrl = link.icon || `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+    // 通过服务器代理获取图标（解决国外图标无法访问的问题）
+    const iconUrl = `/api/icon-proxy?url=${encodeURIComponent(originalIconUrl)}`;
     const hiddenClass = link.is_hidden ? 'hidden-item' : '';
     const firstChar = escapeHtml(link.title.charAt(0).toUpperCase());
     const tooltip = escapeHtml(link.description || link.title);

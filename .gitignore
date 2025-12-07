@@ -2,6 +2,9 @@
 data.db
 data/
 
+# 图标缓存
+icon_cache/
+
 # Python 虚拟环境
 venv/
 __pycache__/

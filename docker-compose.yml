@@ -13,8 +13,11 @@ services:
     volumes:
       # 数据库文件挂载到本地，方便备份和迁移
       - ./data:/app/data
+      # 图标缓存目录挂载（可选，持久化图标缓存）
+      - ./icon_cache:/app/icon_cache
     environment:
       - DATABASE_PATH=/app/data/data.db
+      - ICON_CACHE_DIR=/app/icon_cache
       - TZ=Asia/Shanghai
     # 安全设置
     security_opt:
