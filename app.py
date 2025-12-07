@@ -256,7 +256,7 @@ def require_auth(f):
         # 检查 IP 绑定（如果开启，且 token 有记录 IP）
         ip_binding_enabled = get_config('ip_binding_enabled') == '1'
         if ip_binding_enabled and token_info.get('ip'):  # 只有当 ip 值存在且不为 None 时才检查
-            client_ip = request.remote_addr
+            client_ip = get_client_ip()
             if token_info['ip'] != client_ip:
                 return jsonify({'error': 'IP 地址不匹配'}), 401
         

@@ -32,5 +32,6 @@ ENV ICON_CACHE_DIR=/app/icon_cache
 EXPOSE 6966
 
 # 启动命令（使用 gunicorn 生产环境服务器）
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:6966", "app:app"]
+# 注意：必须使用单 worker，因为 token 存储在内存中，多 worker 不共享内存
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:6966", "--timeout", "120", "app:app"]
 
