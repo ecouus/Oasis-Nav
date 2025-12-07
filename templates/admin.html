@@ -12,7 +12,11 @@
         <!-- 初始化面板 -->
         <div class="init-panel hidden" id="initPanel">
             <h2>🚀 初始化 Oasis-Nav</h2>
-            <p style="text-align:center; color:var(--text-muted); margin-bottom:25px;">首次使用，请设置管理密码</p>
+            <p style="text-align:center; color:var(--text-muted); margin-bottom:25px;">首次使用，请设置用户名和密码</p>
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="initUsername" placeholder="至少3个字符，留空默认为admin" maxlength="32">
+            </div>
             <div class="form-group">
                 <label>管理密码</label>
                 <input type="password" id="initPassword" placeholder="至少8位，需包含字母和数字">

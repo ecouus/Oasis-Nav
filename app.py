@@ -355,12 +355,24 @@ def api_init():
         return jsonify({'error': '已初始化'}), 400
     
     data = request.json
+    username = data.get('username', '').strip()
     password = data.get('password')
+    
+    # 验证密码
     if not is_strong_password(password):
         return jsonify({'error': '密码至少8位，需包含字母和数字'}), 400
     
-    # 设置默认用户名为 admin
-    set_config('admin_username', 'admin')
+    # 验证用户名：如果提供，必须至少3个字符；如果留空，则默认为admin
+    if username:
+        if len(username) < 3:
+            return jsonify({'error': '用户名至少3个字符'}), 400
+        if len(username) > 32:
+            return jsonify({'error': '用户名最多32个字符'}), 400
+        set_config('admin_username', username)
+    else:
+        # 留空则默认为admin
+        set_config('admin_username', 'admin')
+    
     set_config('admin_password', hash_password(password))
     return jsonify({'message': '初始化成功'})
 

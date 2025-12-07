@@ -138,10 +138,21 @@ function showPanel(panel) {
 
 // ==================== 认证 ====================
 async function initPassword(event) {
+    const username = document.getElementById('initUsername').value.trim();
     const password = document.getElementById('initPassword').value;
     const confirm = document.getElementById('initPasswordConfirm').value;
     const errorEl = document.getElementById('initError');
     const btn = event.target;
+
+    // 验证用户名：如果提供，必须至少3个字符
+    if (username && username.length < 3) {
+        errorEl.textContent = '用户名至少3个字符';
+        return;
+    }
+    if (username && username.length > 32) {
+        errorEl.textContent = '用户名最多32个字符';
+        return;
+    }
 
     if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
         errorEl.textContent = '密码至少8位，需包含字母和数字';
@@ -159,21 +170,23 @@ async function initPassword(event) {
     errorEl.textContent = '';
 
     try {
+        // 发送初始化请求，用户名留空则传空字符串（后端会处理为默认admin）
         const res = await fetch('/api/init', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password })
+            body: JSON.stringify({ username: username || '', password })
         });
 
         if (res.ok) {
             // 显示登录中状态
             btn.textContent = '登录中...';
             
-            // 自动登录（默认用户名 admin）
+            // 自动登录（使用设置的用户名，如果留空则使用admin）
+            const loginUsername = username || 'admin';
             const loginRes = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: 'admin', password })
+                body: JSON.stringify({ username: loginUsername, password })
             });
             const data = await loginRes.json();
             
