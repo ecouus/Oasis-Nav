@@ -6,6 +6,8 @@ services:
     # build: .
     container_name: oasis-nav
     restart: unless-stopped
+    # 覆盖默认命令：使用单 worker（多 worker 会导致 token 不共享）
+    command: ["gunicorn", "-w", "1", "-b", "0.0.0.0:6966", "--timeout", "120", "app:app"]
     ports:
       - "6966:6966"
     volumes:
