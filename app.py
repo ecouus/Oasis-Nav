@@ -119,11 +119,9 @@ def init_db():
         # 插入默认分类
         default_categories = [
             ('搜索引擎', None, 1),
-            ('社交媒体', None, 2),
-            ('开发工具', None, 3),
-            ('AI 工具', None, 4),
-            ('影音娱乐', None, 5),
-            ('实用工具', None, 6),
+            ('开发工具', None, 2),
+            ('AI 工具', None, 3),
+            ('影音娱乐', None, 4),
         ]
         cursor.executemany(
             'INSERT INTO categories (name, parent_id, sort_order) VALUES (?, ?, ?)',
@@ -135,24 +133,22 @@ def init_db():
             # 搜索引擎
             ('Google', 'https://www.google.com', None, '全球最大的搜索引擎', 1, 0, 1),
             ('Bing', 'https://www.bing.com', None, '微软必应搜索', 1, 0, 2),
-            ('DuckDuckGo', 'https://duckduckgo.com', None, '注重隐私的搜索引擎', 1, 0, 3),
+            ('Yandex', 'https://yandex.com', None, '俄罗斯搜索引擎', 1, 0, 3),
             
             # 开发工具
-            ('GitHub', 'https://github.com', None, '代码托管与协作平台', 3, 0, 1),
+            ('GitHub', 'https://github.com', None, '代码托管与协作平台', 2, 0, 1),
             
             # AI 工具
-            ('ChatGPT', 'https://chat.openai.com', None, 'OpenAI 对话式 AI', 4, 0, 1),
-            ('Claude', 'https://claude.ai', None, 'Anthropic AI 助手', 4, 0, 2),
-            ('Midjourney', 'https://www.midjourney.com', None, 'AI 绘画工具', 4, 0, 3),
+            ('ChatGPT', 'https://chat.openai.com', None, 'OpenAI 对话式 AI', 3, 0, 1),
+            ('Claude', 'https://claude.ai', None, 'Anthropic AI 助手', 3, 0, 2),
+            ('Gemini', 'https://gemini.google.com', None, '谷歌AI助手', 3, 0, 3),
             
             # 影音娱乐
-            ('YouTube', 'https://www.youtube.com', None, '全球最大视频平台', 5, 0, 1),
-            ('Bilibili', 'https://www.bilibili.com', None, '国内弹幕视频网站', 5, 0, 2),
-            ('Spotify', 'https://www.spotify.com', None, '流媒体音乐平台', 5, 0, 3),
-            ('Netflix', 'https://www.netflix.com', None, '流媒体影视平台', 5, 0, 4),
+            ('YouTube', 'https://www.youtube.com', None, '全球最大视频平台', 4, 0, 1),
+            ('Bilibili', 'https://www.bilibili.com', None, '国内弹幕视频网站', 4, 0, 2),
             
             # 隐藏链接示例
-            ('Secret Site', 'https://example.com/secret', None, '这是一个隐藏链接示例', 6, 1, 99),
+            ('Secret Site', 'https://github.com/ecouus/Oasis-Nav', None, '这是一个隐藏链接示例', 4, 1, 1),
         ]
         cursor.executemany(
             '''INSERT INTO links (title, url, icon, description, category_id, is_hidden, sort_order) 
