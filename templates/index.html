@@ -67,34 +67,6 @@
 
     <!-- 页脚 -->
     <footer class="site-footer">
-
-        # 1. 克隆项目
-        
-        git clone https://github.com/ecouus/Oasis-Nav.git
-        
-        cd Oasis-Nav
-        
-          
-        
-        # 2. 创建数据目录并设置安全权限
-        
-        mkdir -p ./data
-        
-        sudo chown -R 999:999 ./data # 匹配容器内用户 UID
-        
-        chmod 750 ./data # 仅所有者和组可访问
-        
-          
-        
-        # 3. 启动服务
-        
-        docker-compose up -d
-        
-          
-        
-        # 4. 查看日志
-        
-        docker-compose logs -f
         <div class="footer-inner">
             <span class="footer-custom" id="footerCustom"></span>
             <span>Powered by <a id="projectLink" href="#" target="_blank">Oasis-Nav</a></span>

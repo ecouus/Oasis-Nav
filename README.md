@@ -5,6 +5,7 @@
 - 📁 多级分类管理
 - 🔖 书签收藏与管理
 - 🔒 密码保护（管理员密码、隐藏链接密码、书签密码）
+- 🌐 图标代理（解决国外图标无法访问问题，支持本地缓存）
 - 🐳 Docker 一键部署
 - 📱 响应式设计
 ## 📋 系统要求
@@ -58,8 +59,8 @@ python app.py
 ```bash
 git clone https://github.com/ecouus/Oasis-Nav.git
 cd Oasis-Nav
-mkdir -p ./data
-chmod 777 ./data
+mkdir -p ./data ./icon_cache
+chmod 777 ./data ./icon_cache
 docker-compose up -d
 docker-compose logs -f
 ```
@@ -69,9 +70,9 @@ docker-compose logs -f
 ```bash
 git clone https://github.com/ecouus/Oasis-Nav.git
 cd Oasis-Nav
-mkdir -p ./data
-sudo chown -R 999:999 ./data
-chmod 750 ./data
+mkdir -p ./data ./icon_cache
+sudo chown -R 999:999 ./data ./icon_cache
+chmod 750 ./data ./icon_cache
 docker-compose up -d
 docker-compose logs -f
 ```
@@ -88,10 +89,16 @@ docker-compose down
 git clone https://github.com/ecouus/Oasis-Nav.git
 cd Oasis-Nav
 docker build -t oasis-nav:latest .
-mkdir -p ./data
-sudo chown -R 999:999 ./data
-chmod 750 ./data
-docker run -d --name oasis-nav -p 6966:6966 -v $(pwd)/data:/app/data -e DATABASE_PATH=/app/data/data.db -e TZ=Asia/Shanghai --restart unless-stopped oasis-nav:latest
+mkdir -p ./data ./icon_cache
+sudo chown -R 999:999 ./data ./icon_cache
+chmod 750 ./data ./icon_cache
+docker run -d --name oasis-nav -p 6966:6966 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/icon_cache:/app/icon_cache \
+  -e DATABASE_PATH=/app/data/data.db \
+  -e ICON_CACHE_DIR=/app/icon_cache \
+  -e TZ=Asia/Shanghai \
+  --restart unless-stopped oasis-nav:latest
 docker logs -f oasis-nav
 docker stop oasis-nav
 docker rm oasis-nav
@@ -116,17 +123,23 @@ docker buildx imagetools inspect YOUR_USERNAME/oasis-nav:latest
 运行远程镜像：
 
 ```bash
-mkdir -p ./data
-sudo chown -R 999:999 ./data
-chmod 750 ./data
-docker run -d --name oasis-nav -p 6966:6966 -v $(pwd)/data:/app/data YOUR_USERNAME/oasis-nav:latest
+mkdir -p ./data ./icon_cache
+sudo chown -R 999:999 ./data ./icon_cache
+chmod 750 ./data ./icon_cache
+docker run -d --name oasis-nav -p 6966:6966 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/icon_cache:/app/icon_cache \
+  YOUR_USERNAME/oasis-nav:latest
 ```
 
 ## 💾 数据备份与恢复
 
 ```bash
+# 备份数据库
 cp -r ./data ./backup-$(date +%Y%m%d)
-tar czf oasis-nav-backup-$(date +%Y%m%d).tar.gz ./data
+# 完整备份（含图标缓存）
+tar czf oasis-nav-backup-$(date +%Y%m%d).tar.gz ./data ./icon_cache
+# 仅备份数据库文件
 cp ./data/data.db ./data.db.backup
 ```
 
@@ -134,10 +147,13 @@ cp ./data/data.db ./data.db.backup
 
 ```bash
 docker-compose down
-cp ./backup/data.db ./data/
+# 恢复数据
 tar xzf oasis-nav-backup-20240101.tar.gz
-sudo chown -R 999:999 ./data
-chmod 750 ./data
+# 或仅恢复数据库
+cp ./backup/data.db ./data/
+# 设置权限
+sudo chown -R 999:999 ./data ./icon_cache
+chmod 750 ./data ./icon_cache
 docker-compose up -d
 ```
 
@@ -146,12 +162,15 @@ docker-compose up -d
 |变量名|说明|默认值|示例|
 |---|---|---|---|
 |DATABASE_PATH|数据库文件路径|data.db|/app/data/data.db|
+|ICON_CACHE_DIR|图标缓存目录|icon_cache|/app/icon_cache|
 |DEBUG|调试模式|0|1|
 |TZ|时区设置|-|Asia/Shanghai|
-|`.env` 示例：||||
+
+`.env` 示例：
 
 ```env
 DATABASE_PATH=/app/data/data.db
+ICON_CACHE_DIR=/app/icon_cache
 DEBUG=0
 TZ=Asia/Shanghai
 ```
@@ -173,8 +192,9 @@ Oasis-Nav/
 │   ├── index.html
 │   ├── admin.html
 │   └── bookmarks.html
-└── data/
-    └── data.db
+├── data/
+│   └── data.db
+└── icon_cache/          # 图标缓存目录（自动创建）
 ```
 
 ## 🔧 常见问题
@@ -186,14 +206,15 @@ ports:
 - "8080:6966"
 ```
 
-### 2. 数据库权限问题
+### 2. 数据库/缓存权限问题
 
 ```bash
-mkdir -p ./data
-chmod 777 ./data
-mkdir -p ./data
-sudo chown -R 999:999 ./data
-chmod 750 ./data
+mkdir -p ./data ./icon_cache
+chmod 777 ./data ./icon_cache
+# 或更安全的方式
+mkdir -p ./data ./icon_cache
+sudo chown -R 999:999 ./data ./icon_cache
+chmod 750 ./data ./icon_cache
 docker-compose down
 docker-compose up -d
 ```
@@ -217,12 +238,14 @@ docker-compose logs --tail=100
 ### 5. 数据迁移
 
 ```bash
-tar czf oasis-nav-data.tar.gz ./data
+# 打包数据和图标缓存
+tar czf oasis-nav-data.tar.gz ./data ./icon_cache
 scp oasis-nav-data.tar.gz user@new-server:/path/to/Oasis-Nav/
+# 在新服务器上
 cd /path/to/Oasis-Nav
 tar xzf oasis-nav-data.tar.gz
-sudo chown -R 999:999 ./data
-chmod 750 ./data
+sudo chown -R 999:999 ./data ./icon_cache
+chmod 750 ./data ./icon_cache
 docker-compose up -d
 ```
 
@@ -266,10 +289,3 @@ MIT License
 
 
 ---
-
-如你需要：
-
-✔ 自动生成 **README 目录**  
-✔ 自动生成 **Obsidian Callout 高亮版本**  
-✔ 自动生成 **可折叠章节（folding）版**  
-我也可以继续帮你优化。
