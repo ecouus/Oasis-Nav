@@ -23,6 +23,7 @@
 let token = localStorage.getItem('oasis_nav_token');
 let categories = [];
 let links = [];
+let defaultCategoryId = null;
 
 // ==================== Token 管理 ====================
 // 检查 token 是否已过期
@@ -220,13 +221,16 @@ function logout() {
 
 // ==================== 数据加载 ====================
 async function loadData() {
-    const [catRes, linkRes] = await Promise.all([
+    const [catRes, linkRes, defaultCatRes] = await Promise.all([
         api('/api/categories'),
-        api('/api/links')  // 后台登录后自动能看到所有链接
+        api('/api/links'),  // 后台登录后自动能看到所有链接
+        fetch('/api/default-category')
     ]);
 
     categories = await catRes.json();
     links = await linkRes.json();
+    const defaultCatData = await defaultCatRes.json();
+    defaultCategoryId = defaultCatData.default_category_id;
 
     renderCategoriesTable();
     renderLinksTable();
@@ -367,13 +371,20 @@ function renderCategoriesTable() {
     
     // 按层级渲染：父分类 -> 子分类
     parentCategories.forEach(parent => {
+        const isDefault = defaultCategoryId === parent.id;
+        const defaultBadge = isDefault ? '<span class="badge badge-default">默认</span>' : '';
+        const defaultBtn = isDefault 
+            ? `<button class="btn btn-outline btn-sm" onclick="setDefaultCategory(null)" title="取消默认">取消默认</button>`
+            : `<button class="btn btn-outline btn-sm" onclick="setDefaultCategory(${parent.id})" title="设为默认">设为默认</button>`;
+        
         // 父分类行
         html += `
             <tr draggable="true" data-id="${parent.id}" data-type="category">
                 <td class="drag-handle">⋮⋮</td>
-                <td><strong>${escapeHtml(parent.name)}</strong></td>
+                <td><strong>${escapeHtml(parent.name)}</strong> ${defaultBadge}</td>
                 <td>-</td>
                 <td class="actions">
+                    ${defaultBtn}
                     <button class="btn btn-outline btn-sm" onclick="editCategory(${parent.id})">编辑</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteCategory(${parent.id})">删除</button>
                 </td>
@@ -383,12 +394,19 @@ function renderCategoriesTable() {
         // 子分类行（缩进显示）
         const children = childrenMap[parent.id] || [];
         children.forEach(child => {
+            const isChildDefault = defaultCategoryId === child.id;
+            const childDefaultBadge = isChildDefault ? '<span class="badge badge-default">默认</span>' : '';
+            const childDefaultBtn = isChildDefault 
+                ? `<button class="btn btn-outline btn-sm" onclick="setDefaultCategory(null)" title="取消默认">取消默认</button>`
+                : `<button class="btn btn-outline btn-sm" onclick="setDefaultCategory(${child.id})" title="设为默认">设为默认</button>`;
+            
             html += `
                 <tr draggable="true" data-id="${child.id}" data-type="category" class="child-category">
                     <td class="drag-handle">⋮⋮</td>
-                    <td style="padding-left: 30px;">↳ ${escapeHtml(child.name)}</td>
+                    <td style="padding-left: 30px;">↳ ${escapeHtml(child.name)} ${childDefaultBadge}</td>
                     <td>${escapeHtml(parent.name)}</td>
                     <td class="actions">
+                        ${childDefaultBtn}
                         <button class="btn btn-outline btn-sm" onclick="editCategory(${child.id})">编辑</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteCategory(${child.id})">删除</button>
                     </td>
@@ -401,6 +419,27 @@ function renderCategoriesTable() {
     
     // 绑定拖拽事件
     initDragSort(tbody, 'category');
+}
+
+// 设置默认分类
+async function setDefaultCategory(categoryId) {
+    try {
+        const res = await api('/api/default-category', {
+            method: 'PUT',
+            body: JSON.stringify({ category_id: categoryId })
+        });
+        
+        if (res.ok) {
+            defaultCategoryId = categoryId;
+            renderCategoriesTable();
+        } else {
+            const err = await res.json();
+            alert(err.error || '设置失败');
+        }
+    } catch (err) {
+        console.error('设置默认分类失败:', err);
+        alert('网络错误，请重试');
+    }
 }
 
 function updateCategorySelects() {
@@ -639,7 +678,8 @@ function showLinkModal(id = null) {
         document.getElementById('linkUrl').value = '';
         document.getElementById('linkIcon').value = '';
         document.getElementById('linkDescription').value = '';
-        document.getElementById('linkCategory').value = '';
+        // 新建链接时使用默认分类
+        document.getElementById('linkCategory').value = defaultCategoryId || '';
         document.getElementById('linkSort').value = 0;
         document.getElementById('linkHidden').checked = false;
     }
@@ -656,10 +696,13 @@ function editLink(id) {
 }
 
 async function saveLink() {
+    const errorEl = document.getElementById('linkError');
+    errorEl.textContent = '';
+    
     const id = document.getElementById('linkId').value;
     const data = {
-        title: document.getElementById('linkTitle').value,
-        url: document.getElementById('linkUrl').value,
+        title: document.getElementById('linkTitle').value.trim(),
+        url: document.getElementById('linkUrl').value.trim(),
         icon: document.getElementById('linkIcon').value || null,
         description: document.getElementById('linkDescription').value,
         category_id: document.getElementById('linkCategory').value || null,
@@ -668,21 +711,54 @@ async function saveLink() {
     };
 
     if (!data.title || !data.url) {
-        document.getElementById('linkError').textContent = '标题和URL必填';
+        errorEl.textContent = '标题和URL必填';
+        return;
+    }
+
+    // 检查 token 是否过期
+    if (isTokenExpired()) {
+        errorEl.textContent = '登录已过期，请重新登录';
+        setTimeout(() => {
+            clearToken();
+            showPanel('login');
+        }, 1500);
         return;
     }
 
     const url = id ? `/api/links/${id}` : '/api/links';
     const method = id ? 'PUT' : 'POST';
+    
+    // 获取保存按钮并显示加载状态
+    const btn = document.querySelector('#linkModal .btn-primary');
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = '保存中...';
 
-    const res = await api(url, { method, body: JSON.stringify(data) });
+    try {
+        const res = await api(url, { method, body: JSON.stringify(data) });
 
-    if (res.ok) {
-        closeLinkModal();
-        loadData();
-    } else {
-        const err = await res.json();
-        document.getElementById('linkError').textContent = err.error || '保存失败';
+        if (res.ok) {
+            closeLinkModal();
+            loadData();
+        } else {
+            const err = await res.json();
+            // 如果是授权错误，提示重新登录
+            if (res.status === 401) {
+                errorEl.textContent = '登录已过期，请重新登录';
+                setTimeout(() => {
+                    clearToken();
+                    showPanel('login');
+                }, 1500);
+            } else {
+                errorEl.textContent = err.error || '保存失败';
+            }
+        }
+    } catch (err) {
+        console.error('保存链接失败:', err);
+        errorEl.textContent = '网络错误，请重试';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 

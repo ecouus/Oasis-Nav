@@ -239,9 +239,9 @@ def require_auth(f):
             del active_tokens[token]
             return jsonify({'error': 'Token 已过期'}), 401
         
-        # 检查 IP 绑定（如果开启）
+        # 检查 IP 绑定（如果开启，且 token 有记录 IP）
         ip_binding_enabled = get_config('ip_binding_enabled') == '1'
-        if ip_binding_enabled and 'ip' in token_info:
+        if ip_binding_enabled and token_info.get('ip'):  # 只有当 ip 值存在且不为 None 时才检查
             client_ip = request.remote_addr
             if token_info['ip'] != client_ip:
                 return jsonify({'error': 'IP 地址不匹配'}), 401
@@ -669,7 +669,42 @@ def api_delete_category(id):
     cursor.execute('UPDATE links SET category_id = NULL WHERE category_id = ?', (id,))
     conn.commit()
     conn.close()
+    
+    # 如果删除的是默认分类，清除默认分类设置
+    default_cat = get_config('default_category_id')
+    if default_cat and int(default_cat) == id:
+        set_config('default_category_id', '')
+    
     return jsonify({'message': '删除成功'})
+
+@app.route('/api/default-category', methods=['GET'])
+def api_get_default_category():
+    """获取默认分类 ID"""
+    default_id = get_config('default_category_id')
+    return jsonify({'default_category_id': int(default_id) if default_id else None})
+
+@app.route('/api/default-category', methods=['PUT'])
+@require_auth
+def api_set_default_category():
+    """设置默认分类"""
+    data = request.json
+    category_id = data.get('category_id')
+    
+    if category_id:
+        # 验证分类是否存在
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id FROM categories WHERE id = ?', (category_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': '分类不存在'}), 400
+        conn.close()
+        set_config('default_category_id', str(category_id))
+    else:
+        # 清除默认分类
+        set_config('default_category_id', '')
+    
+    return jsonify({'message': '默认分类设置成功'})
 
 @app.route('/api/links', methods=['GET'])
 def api_get_links():
@@ -1046,9 +1081,9 @@ def require_bookmark_auth(f):
             del active_tokens[token_key]
             return jsonify({'error': 'Token 已过期'}), 401
         
-        # 检查 IP 绑定（如果开启）
+        # 检查 IP 绑定（如果开启，且 token 有记录 IP）
         ip_binding_enabled = get_config('ip_binding_enabled') == '1'
-        if ip_binding_enabled and 'ip' in token_info:
+        if ip_binding_enabled and token_info.get('ip'):  # 只有当 ip 值存在且不为 None 时才检查
             client_ip = request.remote_addr
             if token_info['ip'] != client_ip:
                 return jsonify({'error': 'IP 地址不匹配'}), 401

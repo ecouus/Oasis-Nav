@@ -403,6 +403,12 @@ tbody tr.category-header:not(:first-child) {
     color: #43a047;
 }
 
+.badge-default {
+    background: rgba(33, 150, 243, 0.15);
+    color: #1e88e5;
+    margin-left: 8px;
+}
+
 .actions {
     display: flex;
     gap: 6px;
