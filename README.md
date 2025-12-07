@@ -1,7 +1,6 @@
 # Oasis-Nav
 
 轻量级导航页应用，基于 Flask + SQLite 构建。
-![demo截图](https://youke1.picui.cn/s1/2025/12/07/69352e8cd663b.png)
 ## ✨ 功能特性
 
 - 🎯 简洁美观的导航页界面
@@ -11,7 +10,7 @@
 - 🌐 图标代理与本地缓存
 - 🐳 Docker 一键部署
 - 📱 响应式设计，支持多主题
-
+![demo截图](https://youke1.picui.cn/s1/2025/12/07/69352e8cd663b.png)
 ## 🪶 轻量级设计
 
 Oasis-Nav 采用极简架构，追求最小资源占用：
