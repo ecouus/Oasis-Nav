@@ -15,7 +15,7 @@
             <p style="text-align:center; color:var(--text-muted); margin-bottom:25px;">首次使用，请设置用户名和密码</p>
             <div class="form-group">
                 <label>用户名</label>
-                <input type="text" id="initUsername" placeholder="至少3个字符，留空默认为admin" maxlength="32">
+                <input type="text" id="initUsername" placeholder="至少3个字符，默认为admin" maxlength="32">
             </div>
             <div class="form-group">
                 <label>管理密码</label>
@@ -194,7 +194,7 @@
                     </p>
                     <div class="form-group">
                         <label>书签密码</label>
-                        <input type="password" id="newBookmarkPassword" placeholder="至少8位，需包含字母和数字">
+                        <input type="password" id="newBookmarkPassword" placeholder="至少4位">
                     </div>
                     <button class="btn btn-primary" onclick="updateBookmarkPassword()">更新书签密码</button>
                     <div class="success-msg hidden" id="bookmarkSuccess">更新成功</div>

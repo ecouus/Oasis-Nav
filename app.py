@@ -373,7 +373,13 @@ def api_init():
         # 留空则默认为admin
         set_config('admin_username', 'admin')
     
+    # 设置后台登录密码
     set_config('admin_password', hash_password(password))
+    
+    # 设置默认的隐藏密码和书签密码为后台登录密码
+    set_config('hidden_password', hash_password(password))
+    set_config('bookmark_password', hash_password(password))
+    
     return jsonify({'message': '初始化成功'})
 
 @app.route('/api/check-init', methods=['GET'])
@@ -1095,8 +1101,8 @@ def api_update_bookmark_password():
     """更新书签密码（仅管理员）"""
     data = request.json
     password = data.get('password')
-    if not is_strong_password(password):
-        return jsonify({'error': '密码至少8位，需包含字母和数字'}), 400
+    if not password or len(password) < 4:
+        return jsonify({'error': '密码至少4位'}), 400
     set_config('bookmark_password', hash_password(password))
     return jsonify({'message': '书签密码更新成功'})
 

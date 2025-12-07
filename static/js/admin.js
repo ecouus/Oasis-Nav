@@ -893,8 +893,8 @@ async function updateBookmarkPassword() {
     errorEl.textContent = '';
     successEl.classList.add('hidden');
 
-    if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-        errorEl.textContent = '密码至少8位，需包含字母和数字';
+    if (password.length < 4) {
+        errorEl.textContent = '密码至少4位';
         return;
     }
 
