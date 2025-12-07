@@ -350,6 +350,18 @@ def api_init():
     set_config('admin_password', hash_password(password))
     return jsonify({'message': '初始化成功'})
 
+@app.route('/api/check-init', methods=['GET'])
+def api_check_init():
+    """检查是否已初始化（不需要认证，不记录失败）"""
+    initialized = bool(get_config('admin_password'))
+    return jsonify({'initialized': initialized, 'need_init': not initialized})
+
+@app.route('/api/verify-token', methods=['GET'])
+@require_auth
+def api_verify_token():
+    """验证 token 是否有效（需要认证）"""
+    return jsonify({'valid': True})
+
 def check_login_limit(ip):
     """检查是否超过登录限制"""
     if ip not in login_attempts:

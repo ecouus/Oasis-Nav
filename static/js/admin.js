@@ -74,43 +74,68 @@ function escapeAttr(text) {
 }
 
 // ==================== 工具函数 ====================
-function api(url, options = {}) {
+async function api(url, options = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(url, { ...options, headers });
+    
+    const res = await fetch(url, { ...options, headers });
+    
+    // 统一处理 401 认证错误（排除验证 token 的请求，避免循环）
+    if (res.status === 401 && !url.includes('/api/verify-token')) {
+        clearToken();
+        showPanel('login');
+    }
+    
+    return res;
+}
+
+// 处理认证错误的通用函数
+function handleAuthError(res) {
+    if (res.status === 401) {
+        alert('登录已过期，请重新登录');
+        clearToken();
+        showPanel('login');
+        return true;
+    }
+    return false;
 }
 
 // ==================== 初始化检查 ====================
 async function checkAuth() {
-    // 检查是否需要初始化
-    const res = await fetch('/api/categories');
-    
-    // 尝试访问一个需要初始化的接口来判断状态
-    const testRes = await api('/api/links');
-    
-    // 如果有 token，验证是否有效
-    if (token) {
-        const verifyRes = await api('/api/categories', { method: 'POST', body: JSON.stringify({}) });
-        if (verifyRes.status === 401) {
+    try {
+        // 1. 检查是否已初始化（使用专门的 API，不会触发登录失败计数）
+        const initCheck = await fetch('/api/check-init');
+        const initData = await initCheck.json();
+        
+        if (initData.need_init) {
+            showPanel('init');
+            return;
+        }
+        
+        // 2. 检查本地 token 是否过期
+        if (token && isTokenExpired()) {
             clearToken();
         }
-    }
-
-    // 尝试登录来检查是否已初始化
-    const loginCheck = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: '' })
-    });
-    const loginData = await loginCheck.json();
-
-    if (loginData.need_init) {
-        showPanel('init');
-    } else if (!token) {
+        
+        // 3. 如果有 token，验证是否有效
+        if (token) {
+            const verifyRes = await api('/api/verify-token');
+            if (verifyRes.status === 401) {
+                clearToken();
+            }
+        }
+        
+        // 4. 根据 token 状态显示对应面板
+        if (!token) {
+            showPanel('login');
+        } else {
+            showPanel('admin');
+            loadData();
+        }
+    } catch (err) {
+        console.error('认证检查失败:', err);
+        // 网络错误时显示登录面板
         showPanel('login');
-    } else {
-        showPanel('admin');
-        loadData();
     }
 }
 
@@ -423,6 +448,14 @@ function renderCategoriesTable() {
 
 // 设置默认分类
 async function setDefaultCategory(categoryId) {
+    // 检查 token 是否过期
+    if (isTokenExpired()) {
+        alert('登录已过期，请重新登录');
+        clearToken();
+        showPanel('login');
+        return;
+    }
+    
     try {
         const res = await api('/api/default-category', {
             method: 'PUT',
@@ -432,6 +465,11 @@ async function setDefaultCategory(categoryId) {
         if (res.ok) {
             defaultCategoryId = categoryId;
             renderCategoriesTable();
+        } else if (res.status === 401) {
+            // token 无效，清除并跳转登录
+            alert('登录已过期，请重新登录');
+            clearToken();
+            showPanel('login');
         } else {
             const err = await res.json();
             alert(err.error || '设置失败');
@@ -487,6 +525,16 @@ async function saveCategory() {
     const errorEl = document.getElementById('categoryError');
     errorEl.textContent = '';
     
+    // 检查 token 是否过期
+    if (isTokenExpired()) {
+        errorEl.textContent = '登录已过期，请重新登录';
+        setTimeout(() => {
+            clearToken();
+            showPanel('login');
+        }, 1500);
+        return;
+    }
+    
     const id = document.getElementById('categoryId').value;
     const nameValue = document.getElementById('categoryName').value.trim();
     const parentValue = document.getElementById('categoryParent').value;
@@ -512,6 +560,8 @@ async function saveCategory() {
         if (res.ok) {
             closeCategoryModal();
             loadData();
+        } else if (res.status === 401) {
+            errorEl.textContent = '登录已过期，请重新登录';
         } else {
             const err = await res.json();
             errorEl.textContent = err.error || '保存失败';
@@ -525,11 +575,18 @@ async function saveCategory() {
 async function deleteCategory(id) {
     if (!confirm('确定删除此分类？该分类下的链接将变为未分类')) return;
 
-    const res = await api(`/api/categories/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-        loadData();
-    } else {
-        alert('删除失败');
+    try {
+        const res = await api(`/api/categories/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            loadData();
+        } else if (res.status === 401) {
+            // 401 已在 api 函数中处理
+        } else {
+            alert('删除失败');
+        }
+    } catch (err) {
+        console.error('删除分类失败:', err);
+        alert('网络错误，请重试');
     }
 }
 
@@ -765,11 +822,18 @@ async function saveLink() {
 async function deleteLink(id) {
     if (!confirm('确定删除此链接？')) return;
 
-    const res = await api(`/api/links/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-        loadData();
-    } else {
-        alert('删除失败');
+    try {
+        const res = await api(`/api/links/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            loadData();
+        } else if (res.status === 401) {
+            // 401 已在 api 函数中处理
+        } else {
+            alert('删除失败');
+        }
+    } catch (err) {
+        console.error('删除链接失败:', err);
+        alert('网络错误，请重试');
     }
 }
 
