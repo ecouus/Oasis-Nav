@@ -89,16 +89,6 @@ async function api(url, options = {}) {
     return res;
 }
 
-// 处理认证错误的通用函数
-function handleAuthError(res) {
-    if (res.status === 401) {
-        alert('登录已过期，请重新登录');
-        clearToken();
-        showPanel('login');
-        return true;
-    }
-    return false;
-}
 
 // ==================== 初始化检查 ====================
 async function checkAuth() {
@@ -186,9 +176,19 @@ async function initPassword(event) {
                 body: JSON.stringify({ username: 'admin', password })
             });
             const data = await loginRes.json();
-            saveToken(data.token, data.expires_in);
-            showPanel('admin');
-            loadData();
+            
+            // 检查登录是否成功
+            if (loginRes.ok && data.token) {
+                saveToken(data.token, data.expires_in);
+                showPanel('admin');
+                loadData();
+            } else {
+                // 登录失败，跳转到登录页面
+                errorEl.textContent = '初始化成功，请登录';
+                btn.disabled = false;
+                btn.textContent = originalText;
+                showPanel('login');
+            }
         } else {
             const data = await res.json();
             errorEl.textContent = data.error || '初始化失败';
@@ -448,14 +448,6 @@ function renderCategoriesTable() {
 
 // 设置默认分类
 async function setDefaultCategory(categoryId) {
-    // 检查 token 是否过期
-    if (isTokenExpired()) {
-        alert('登录已过期，请重新登录');
-        clearToken();
-        showPanel('login');
-        return;
-    }
-    
     try {
         const res = await api('/api/default-category', {
             method: 'PUT',
@@ -465,12 +457,8 @@ async function setDefaultCategory(categoryId) {
         if (res.ok) {
             defaultCategoryId = categoryId;
             renderCategoriesTable();
-        } else if (res.status === 401) {
-            // token 无效，清除并跳转登录
-            alert('登录已过期，请重新登录');
-            clearToken();
-            showPanel('login');
-        } else {
+        } else if (res.status !== 401) {
+            // 401 已在 api() 中处理，这里只处理其他错误
             const err = await res.json();
             alert(err.error || '设置失败');
         }
@@ -525,16 +513,6 @@ async function saveCategory() {
     const errorEl = document.getElementById('categoryError');
     errorEl.textContent = '';
     
-    // 检查 token 是否过期
-    if (isTokenExpired()) {
-        errorEl.textContent = '登录已过期，请重新登录';
-        setTimeout(() => {
-            clearToken();
-            showPanel('login');
-        }, 1500);
-        return;
-    }
-    
     const id = document.getElementById('categoryId').value;
     const nameValue = document.getElementById('categoryName').value.trim();
     const parentValue = document.getElementById('categoryParent').value;
@@ -560,9 +538,8 @@ async function saveCategory() {
         if (res.ok) {
             closeCategoryModal();
             loadData();
-        } else if (res.status === 401) {
-            errorEl.textContent = '登录已过期，请重新登录';
-        } else {
+        } else if (res.status !== 401) {
+            // 401 已在 api() 中处理
             const err = await res.json();
             errorEl.textContent = err.error || '保存失败';
         }
@@ -772,16 +749,6 @@ async function saveLink() {
         return;
     }
 
-    // 检查 token 是否过期
-    if (isTokenExpired()) {
-        errorEl.textContent = '登录已过期，请重新登录';
-        setTimeout(() => {
-            clearToken();
-            showPanel('login');
-        }, 1500);
-        return;
-    }
-
     const url = id ? `/api/links/${id}` : '/api/links';
     const method = id ? 'PUT' : 'POST';
     
@@ -797,18 +764,10 @@ async function saveLink() {
         if (res.ok) {
             closeLinkModal();
             loadData();
-        } else {
+        } else if (res.status !== 401) {
+            // 401 已在 api() 中处理
             const err = await res.json();
-            // 如果是授权错误，提示重新登录
-            if (res.status === 401) {
-                errorEl.textContent = '登录已过期，请重新登录';
-                setTimeout(() => {
-                    clearToken();
-                    showPanel('login');
-                }, 1500);
-            } else {
-                errorEl.textContent = err.error || '保存失败';
-            }
+            errorEl.textContent = err.error || '保存失败';
         }
     } catch (err) {
         console.error('保存链接失败:', err);
