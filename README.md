@@ -71,6 +71,8 @@ docker logs -f oasis-nav
 
 访问：http://YOUR_SERVER_IP:6966
 
+> 💡 **生产环境建议**：使用 Nginx 反向代理 + HTTPS，详见 [Nginx 配置](#-nginx-反向代理配置) 章节
+
 ### Docker Compose 部署
 
 ```bash
@@ -126,6 +128,116 @@ chmod 750 ./data ./icon_cache
 docker-compose up -d
 ```
 
+## 🌐 Nginx 反向代理配置
+
+在生产环境中，建议使用 Nginx 作为反向代理，提供 HTTPS 支持和更好的性能。
+
+### 通用 Nginx 配置
+
+将以下配置保存到 `/etc/nginx/sites-available/oasis-nav`（或你的域名配置文件）：
+
+```nginx
+# HTTP 重定向到 HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.com;  # 替换为你的域名
+    
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS 主配置
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name your-domain.com;  # 替换为你的域名
+
+    # SSL 证书配置（使用 Let's Encrypt 或其他证书）
+    ssl_certificate /etc/nginx/certs/your-domain.com_cert.pem;
+    ssl_certificate_key /etc/nginx/certs/your-domain.com_key.pem;
+    
+    # SSL 优化配置（可选）
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # 上传文件大小限制
+    client_max_body_size 100M;
+
+    # 反向代理到后端
+    location / {
+        # 后端服务地址（如果 Nginx 和 Docker 在同一台机器，使用 127.0.0.1）
+        proxy_pass http://127.0.0.1:6966;
+        
+        # 基础代理头
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        
+        # 关键：传递 Authorization 头（用于 API 认证）
+        proxy_set_header Authorization $http_authorization;
+        proxy_pass_header Authorization;
+        
+        # HTTP 版本
+        proxy_http_version 1.1;
+        
+        # 超时配置
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+### 配置说明
+
+**注意事项：**
+- 将 `your-domain.com` 替换为你的实际域名
+- 将证书路径替换为你的实际证书路径
+- 如果 Docker 容器运行在其他机器，将 `127.0.0.1:6966` 替换为实际 IP 和端口
+- 确保防火墙允许 80 和 443 端口访问
+
+### 部署步骤
+
+1. **创建配置文件**
+   ```bash
+   sudo nano /etc/nginx/sites-available/oasis-nav
+   ```
+   粘贴上面的配置并修改域名和证书路径
+
+2. **创建软链接（如果使用 sites-available/sites-enabled）**
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/oasis-nav /etc/nginx/sites-enabled/
+   ```
+
+3. **测试配置**
+   ```bash
+   sudo nginx -t
+   ```
+
+4. **重载 Nginx**
+   ```bash
+   sudo nginx -s reload
+   # 或
+   sudo systemctl reload nginx
+   ```
+
+### 使用 Let's Encrypt 免费 SSL 证书
+
+```bash
+# 安装 Certbot
+sudo apt update
+sudo apt install certbot python3-certbot-nginx
+
+# 自动获取并配置证书
+sudo certbot --nginx -d your-domain.com
+
+# 证书会自动续期（Certbot 会配置 cron 任务）
+```
+
 ## 🔧 常见问题
 
 ### 端口被占用
@@ -152,6 +264,13 @@ docker-compose up -d
 ```bash
 docker logs -f oasis-nav
 ```
+
+### Nginx 配置后无法访问
+
+如果通过 Nginx 访问时出现问题，检查：
+- ✅ 后端服务是否运行：`docker ps`
+- ✅ Nginx 配置是否正确：`nginx -t`
+- ✅ 防火墙是否允许 80 和 443 端口
 
 ## ⚙️ 环境变量
 
@@ -208,7 +327,7 @@ Oasis-Nav/
 
 ### 部署安全
 - ✅ 使用强密码（至少 8 位，包含字母和数字）
-- ✅ 使用反向代理（Nginx/Caddy）+ HTTPS 加密传输
+- ✅ **强烈建议使用反向代理（Nginx/Caddy）+ HTTPS 加密传输**（参考 [Nginx 配置](#-nginx-反向代理配置)）
 - ✅ 定期备份数据，备份文件加密存储
 - ✅ 使用安全权限（chmod 750）
 - ✅ 开启 IP 绑定功能（后台 → 安全设置）
