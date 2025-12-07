@@ -222,7 +222,7 @@ Oasis-Nav/
 
 ## 📄 许可证
 
-MIT License
+[MIT License](https://github.com/ecouus/Oasis-Nav/blob/main/LICENSE)
 
 ## 🔗 链接
 
