@@ -37,6 +37,20 @@ login_attempts = {}  # {ip: {'count': 0, 'locked_until': datetime}}
 MAX_LOGIN_ATTEMPTS = 5  # 最大尝试次数
 LOCKOUT_DURATION = 15  # 锁定时间（分钟）
 
+def get_client_ip():
+    """获取真实客户端 IP（支持反向代理）"""
+    # 优先从 X-Forwarded-For 获取（Nginx 转发）
+    forwarded_for = request.headers.get('X-Forwarded-For')
+    if forwarded_for:
+        # X-Forwarded-For 可能包含多个 IP，取第一个（真实客户端 IP）
+        return forwarded_for.split(',')[0].strip()
+    # 其次从 X-Real-IP 获取（Nginx 直接设置）
+    real_ip = request.headers.get('X-Real-IP')
+    if real_ip:
+        return real_ip
+    # 最后使用 remote_addr（直接访问或没有配置 Nginx）
+    return request.remote_addr
+
 def get_db():
     """获取数据库连接"""
     # 确保数据库目录存在（Docker 挂载卷时可能为空）
@@ -399,7 +413,7 @@ def clear_login_attempts(ip):
 @app.route('/api/login', methods=['POST'])
 def api_login():
     """登录"""
-    client_ip = request.remote_addr
+    client_ip = get_client_ip()
     
     # 检查登录限制
     allowed, error_msg = check_login_limit(client_ip)
@@ -444,7 +458,7 @@ def api_login():
 @app.route('/api/verify-hidden', methods=['POST'])
 def api_verify_hidden():
     """验证隐藏密码"""
-    client_ip = request.remote_addr
+    client_ip = get_client_ip()
     
     # 检查登录限制
     allowed, error_msg = check_login_limit(client_ip)
@@ -738,7 +752,7 @@ def api_get_links():
             if token_info['expires'] > datetime.now():
                 # 检查 IP 绑定（如果开启）
                 ip_binding_enabled = get_config('ip_binding_enabled') == '1'
-                if not ip_binding_enabled or token_info.get('ip') == request.remote_addr:
+                if not ip_binding_enabled or token_info.get('ip') == get_client_ip():
                     can_see_hidden = True
     
     # 方式2: 后台管理员登录的 token（Bearer token）
@@ -750,7 +764,7 @@ def api_get_links():
             if token_info['expires'] > datetime.now():
                 # 检查 IP 绑定（如果开启）
                 ip_binding_enabled = get_config('ip_binding_enabled') == '1'
-                if not ip_binding_enabled or token_info.get('ip') == request.remote_addr:
+                if not ip_binding_enabled or token_info.get('ip') == get_client_ip():
                     can_see_hidden = True
     
     if can_see_hidden:
@@ -1029,7 +1043,7 @@ def api_bookmarks_check():
 @app.route('/api/bookmarks/auth', methods=['POST'])
 def api_bookmarks_auth():
     """书签页密码验证（独立密码，返回临时 token，不缓存）"""
-    client_ip = request.remote_addr
+    client_ip = get_client_ip()
     
     # 检查登录限制（与管理员登录共享限制）
     allowed, error_msg = check_login_limit(client_ip)
@@ -1096,7 +1110,7 @@ def require_bookmark_auth(f):
         # 检查 IP 绑定（如果开启，且 token 有记录 IP）
         ip_binding_enabled = get_config('ip_binding_enabled') == '1'
         if ip_binding_enabled and token_info.get('ip'):  # 只有当 ip 值存在且不为 None 时才检查
-            client_ip = request.remote_addr
+            client_ip = get_client_ip()
             if token_info['ip'] != client_ip:
                 return jsonify({'error': 'IP 地址不匹配'}), 401
         
