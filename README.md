@@ -224,7 +224,6 @@ Oasis-Nav/
 
 [MIT License](https://github.com/ecouus/Oasis-Nav/blob/main/LICENSE)
 
-## 🔗 链接
+## 🔗 其他
 
-- [项目地址](https://github.com/ecouus/Oasis-Nav)
 - [问题反馈](https://github.com/ecouus/Oasis-Nav/issues)
