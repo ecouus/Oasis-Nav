@@ -5,6 +5,9 @@ data/
 # 图标缓存
 icon_cache/
 
+# 资源文件（临时文件、截图等）
+assets/
+
 # Python 虚拟环境
 venv/
 __pycache__/

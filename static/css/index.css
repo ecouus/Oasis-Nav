@@ -48,7 +48,7 @@ body {
     top: 12px;
     left: 12px;
     right: 12px;
-    height: 52px;
+    min-height: 52px; /* 改为最小高度，允许根据内容自适应 */
     /* iOS 液态玻璃效果 */
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: blur(40px) saturate(180%);
@@ -58,7 +58,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
+    padding: 8px 24px; /* 增加上下内边距，为换行留出空间 */
     z-index: 100;
     overflow: visible;
     box-shadow: 
@@ -105,8 +105,9 @@ body {
 .category-nav {
     display: flex;
     align-items: center;
+    flex-wrap: wrap; /* 允许换行 */
     gap: 4px;
-    padding: 4px 0;
+    padding: 0; /* 移除内边距，由父容器控制 */
     flex: 1;
     min-width: 0;
     overflow: visible; /* 允许下拉菜单显示 */
